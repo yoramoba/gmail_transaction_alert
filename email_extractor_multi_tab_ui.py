@@ -49,7 +49,9 @@ COLORS = {
     "danger": "#dc2626",
     "danger_hover": "#b91c1c",
     "row_alt": "#f9fbff",
-    "selected": "#dbeafe"
+    "selected": "#dbeafe",
+    "header": "#0f766e",
+    "header_dark": "#115e59"
 }
 
 
@@ -91,20 +93,20 @@ def configure_theme(root):
 
     style.configure(
         "Header.TFrame",
-        background=COLORS["text"],
+        background=COLORS["header"],
         relief="flat"
     )
     style.configure(
         "Title.TLabel",
-        background=COLORS["text"],
+        background=COLORS["header"],
         foreground="#ffffff",
-        font=(font_family, 22, "bold")
+        font=(font_family, 18, "bold")
     )
     style.configure(
         "Subtitle.TLabel",
-        background=COLORS["text"],
-        foreground="#cbd5e1",
-        font=(font_family, 10)
+        background=COLORS["header"],
+        foreground="#d9fffb",
+        font=(font_family, 9)
     )
     style.configure(
         "Section.TLabel",
@@ -122,8 +124,8 @@ def configure_theme(root):
         "Status.TLabel",
         background=COLORS["surface_alt"],
         foreground=COLORS["success"],
-        font=(font_family, 10, "bold"),
-        padding=(12, 7)
+        font=(font_family, 9, "bold"),
+        padding=(10, 5)
     )
 
     style.configure(
@@ -149,7 +151,7 @@ def configure_theme(root):
         bordercolor=COLORS["border"],
         lightcolor=COLORS["border"],
         darkcolor=COLORS["border"],
-        padding=(8, 6)
+        padding=(7, 4)
     )
     style.map("TEntry", bordercolor=[("focus", COLORS["primary"])])
 
@@ -159,7 +161,7 @@ def configure_theme(root):
         foreground=COLORS["text"],
         bordercolor=COLORS["border"],
         arrowcolor=COLORS["muted"],
-        padding=(8, 5)
+        padding=(7, 4)
     )
     style.map(
         "TCombobox",
@@ -173,7 +175,7 @@ def configure_theme(root):
         foreground=COLORS["text"],
         bordercolor=COLORS["border"],
         focusthickness=0,
-        padding=(13, 8)
+        padding=(11, 6)
     )
     style.map(
         "TButton",
@@ -185,7 +187,7 @@ def configure_theme(root):
         background=COLORS["primary"],
         foreground="#ffffff",
         bordercolor=COLORS["primary"],
-        padding=(16, 8)
+        padding=(14, 6)
     )
     style.map(
         "Accent.TButton",
@@ -197,7 +199,7 @@ def configure_theme(root):
         background="#ffffff",
         foreground=COLORS["danger"],
         bordercolor="#fecaca",
-        padding=(13, 8)
+        padding=(11, 6)
     )
     style.map(
         "Danger.TButton",
@@ -215,7 +217,7 @@ def configure_theme(root):
         "TNotebook.Tab",
         background="#e8eef7",
         foreground=COLORS["muted"],
-        padding=(18, 10),
+        padding=(16, 8),
         font=(font_family, 10, "bold")
     )
     style.map(
@@ -230,7 +232,7 @@ def configure_theme(root):
         fieldbackground=COLORS["surface"],
         foreground=COLORS["text"],
         bordercolor=COLORS["border"],
-        rowheight=30,
+        rowheight=28,
         font=(font_family, 9)
     )
     style.configure(
@@ -387,6 +389,38 @@ def connect_imap(imap_server, imap_port, login_email, password):
     mail = imaplib.IMAP4_SSL(imap_server, int(imap_port))
     mail.login(login_email, password)
     return mail
+
+
+def get_message_seen_state(mail, message_id):
+    status, data = mail.fetch(message_id, "(FLAGS)")
+    if status != "OK" or not data:
+        return None
+
+    flags_text = " ".join(
+        item.decode("utf-8", errors="ignore") if isinstance(item, bytes) else str(item)
+        for item in data
+    )
+    return "\\Seen" in flags_text
+
+
+def restore_message_seen_state(mail, message_id, was_seen):
+    if was_seen is None:
+        return
+
+    try:
+        if was_seen:
+            mail.store(message_id, "+FLAGS", "\\Seen")
+        else:
+            mail.store(message_id, "-FLAGS", "\\Seen")
+    except Exception:
+        pass
+
+
+def fetch_message_without_changing_seen(mail, message_id):
+    was_seen = get_message_seen_state(mail, message_id)
+    status, msg_data = mail.fetch(message_id, "(BODY.PEEK[])")
+    restore_message_seen_state(mail, message_id, was_seen)
+    return status, msg_data
 
 
 def quote_imap_value(value):
@@ -572,7 +606,7 @@ def fetch_general_emails_imap(
             if progress_callback:
                 progress_callback(f"Reading email {index} of {len(message_ids)}...")
 
-            status, msg_data = mail.fetch(message_id, "(RFC822)")
+            status, msg_data = fetch_message_without_changing_seen(mail, message_id)
             if status != "OK":
                 continue
 
@@ -679,7 +713,7 @@ def fetch_bank_transactions_imap(
             if progress_callback:
                 progress_callback(f"Reading email {index} of {len(message_ids)}...")
 
-            status, msg_data = mail.fetch(message_id, "(RFC822)")
+            status, msg_data = fetch_message_without_changing_seen(mail, message_id)
             if status != "OK":
                 continue
 
@@ -738,12 +772,15 @@ def fetch_bank_transactions_imap(
 
 class ResultsTab(ttk.Frame):
     def __init__(self, parent, app, tab_type):
-        super().__init__(parent, padding=16, style="Modern.TFrame")
+        super().__init__(parent, padding=12, style="Modern.TFrame")
         self.app = app
         self.tab_type = tab_type
         self.results = []
         self.visible_indexes = []
         self.tree_item_to_index = {}
+        self.sort_column = None
+        self.sort_reverse = False
+        self.column_headings = {}
 
         if tab_type == "general":
             self.columns = (
@@ -799,47 +836,50 @@ class ResultsTab(ttk.Frame):
         self.create_widgets()
 
     def create_widgets(self):
-        filters_frame = ttk.LabelFrame(self, text="Email Search Filters", padding=14, style="Card.TLabelframe")
-        filters_frame.pack(fill=tk.X, pady=(0, 12))
+        self.rowconfigure(4, weight=1, minsize=230)
+        self.columnconfigure(0, weight=1)
+
+        filters_frame = ttk.LabelFrame(self, text="Email Search Filters", padding=10, style="Card.TLabelframe")
+        filters_frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
         if self.tab_type == "general":
-            ttk.Label(filters_frame, text="From Contains:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+            ttk.Label(filters_frame, text="From Contains:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
             self.from_email_var = tk.StringVar(value="")
-            ttk.Entry(filters_frame, textvariable=self.from_email_var, width=34).grid(row=0, column=1, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.from_email_var, width=28).grid(row=0, column=1, sticky="w", pady=3)
 
-            ttk.Label(filters_frame, text="To Contains:").grid(row=0, column=2, sticky="w", padx=(20, 8), pady=4)
+            ttk.Label(filters_frame, text="To Contains:").grid(row=0, column=2, sticky="w", padx=(18, 8), pady=3)
             self.to_email_var = tk.StringVar(value="")
-            ttk.Entry(filters_frame, textvariable=self.to_email_var, width=34).grid(row=0, column=3, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.to_email_var, width=28).grid(row=0, column=3, sticky="w", pady=3)
 
-            ttk.Label(filters_frame, text="Subject Contains:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
+            ttk.Label(filters_frame, text="Subject Contains:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=3)
             self.subject_var = tk.StringVar(value="")
-            ttk.Entry(filters_frame, textvariable=self.subject_var, width=34).grid(row=1, column=1, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.subject_var, width=28).grid(row=1, column=1, sticky="w", pady=3)
 
-            ttk.Label(filters_frame, text="Keyword Anywhere:").grid(row=1, column=2, sticky="w", padx=(20, 8), pady=4)
+            ttk.Label(filters_frame, text="Keyword Anywhere:").grid(row=1, column=2, sticky="w", padx=(18, 8), pady=3)
             self.keyword_var = tk.StringVar(value="")
-            ttk.Entry(filters_frame, textvariable=self.keyword_var, width=34).grid(row=1, column=3, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.keyword_var, width=28).grid(row=1, column=3, sticky="w", pady=3)
         else:
-            ttk.Label(filters_frame, text="From Email:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+            ttk.Label(filters_frame, text="From Email:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
             self.from_email_var = tk.StringVar(value="alerts@nbf.ae")
-            ttk.Entry(filters_frame, textvariable=self.from_email_var, width=34).grid(row=0, column=1, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.from_email_var, width=28).grid(row=0, column=1, sticky="w", pady=3)
 
-            ttk.Label(filters_frame, text="Subject:").grid(row=0, column=2, sticky="w", padx=(20, 8), pady=4)
+            ttk.Label(filters_frame, text="Subject:").grid(row=0, column=2, sticky="w", padx=(18, 8), pady=3)
             self.subject_var = tk.StringVar(value="Transaction Alert")
-            ttk.Entry(filters_frame, textvariable=self.subject_var, width=34).grid(row=0, column=3, sticky="w", pady=4)
+            ttk.Entry(filters_frame, textvariable=self.subject_var, width=28).grid(row=0, column=3, sticky="w", pady=3)
 
             self.to_email_var = tk.StringVar(value="")
             self.keyword_var = tk.StringVar(value="")
 
-        ttk.Label(filters_frame, text="Start Date YYYY-MM-DD:").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(filters_frame, text="Start Date YYYY-MM-DD:").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=3)
         self.start_date_var = tk.StringVar(value=datetime.today().strftime("%Y-%m-01"))
-        ttk.Entry(filters_frame, textvariable=self.start_date_var, width=20).grid(row=2, column=1, sticky="w", pady=4)
+        ttk.Entry(filters_frame, textvariable=self.start_date_var, width=18).grid(row=2, column=1, sticky="w", pady=3)
 
-        ttk.Label(filters_frame, text="End Date YYYY-MM-DD:").grid(row=2, column=2, sticky="w", padx=(20, 8), pady=4)
+        ttk.Label(filters_frame, text="End Date YYYY-MM-DD:").grid(row=2, column=2, sticky="w", padx=(18, 8), pady=3)
         self.end_date_var = tk.StringVar(value=datetime.today().strftime("%Y-%m-%d"))
-        ttk.Entry(filters_frame, textvariable=self.end_date_var, width=20).grid(row=2, column=3, sticky="w", pady=4)
+        ttk.Entry(filters_frame, textvariable=self.end_date_var, width=18).grid(row=2, column=3, sticky="w", pady=3)
 
         buttons_frame = ttk.Frame(self, style="Toolbar.TFrame")
-        buttons_frame.pack(fill=tk.X, pady=(0, 12))
+        buttons_frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
         self.run_button = ttk.Button(
             buttons_frame,
@@ -874,51 +914,51 @@ class ResultsTab(ttk.Frame):
             style="Danger.TButton"
         ).pack(side=tk.LEFT, padx=(8, 0))
 
-        result_filter_frame = ttk.LabelFrame(self, text="Results Search / Filters", padding=14, style="Card.TLabelframe")
-        result_filter_frame.pack(fill=tk.X, pady=(0, 12))
+        result_filter_frame = ttk.LabelFrame(self, text="Results Search / Filters", padding=10, style="Card.TLabelframe")
+        result_filter_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
 
-        ttk.Label(result_filter_frame, text="Search in Results:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(result_filter_frame, text="Search in Results:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
         self.result_search_var = tk.StringVar(value="")
-        search_entry = ttk.Entry(result_filter_frame, textvariable=self.result_search_var, width=42)
-        search_entry.grid(row=0, column=1, sticky="w", pady=4)
+        search_entry = ttk.Entry(result_filter_frame, textvariable=self.result_search_var, width=34)
+        search_entry.grid(row=0, column=1, sticky="w", pady=3)
         search_entry.bind("<KeyRelease>", lambda event: self.apply_result_filter())
 
-        ttk.Label(result_filter_frame, text="Column:").grid(row=0, column=2, sticky="w", padx=(20, 8), pady=4)
+        ttk.Label(result_filter_frame, text="Column:").grid(row=0, column=2, sticky="w", padx=(18, 8), pady=3)
         self.result_column_var = tk.StringVar(value="All Columns")
         column_values = ["All Columns"] + [col for col in self.export_fieldnames]
         column_combo = ttk.Combobox(
             result_filter_frame,
             textvariable=self.result_column_var,
             values=column_values,
-            width=24,
+            width=22,
             state="readonly"
         )
-        column_combo.grid(row=0, column=3, sticky="w", pady=4)
+        column_combo.grid(row=0, column=3, sticky="w", pady=3)
         column_combo.bind("<<ComboboxSelected>>", lambda event: self.apply_result_filter())
 
         if self.tab_type == "bank":
-            ttk.Label(result_filter_frame, text="Status:").grid(row=0, column=4, sticky="w", padx=(20, 8), pady=4)
+            ttk.Label(result_filter_frame, text="Status:").grid(row=0, column=4, sticky="w", padx=(18, 8), pady=3)
             self.status_filter_var = tk.StringVar(value="All")
             status_combo = ttk.Combobox(
                 result_filter_frame,
                 textvariable=self.status_filter_var,
                 values=["All", "Parsed", "Failed to parse"],
-                width=18,
+                width=16,
                 state="readonly"
             )
-            status_combo.grid(row=0, column=5, sticky="w", pady=4)
+            status_combo.grid(row=0, column=5, sticky="w", pady=3)
             status_combo.bind("<<ComboboxSelected>>", lambda event: self.apply_result_filter())
         else:
-            ttk.Label(result_filter_frame, text="Attachments:").grid(row=0, column=4, sticky="w", padx=(20, 8), pady=4)
+            ttk.Label(result_filter_frame, text="Attachments:").grid(row=0, column=4, sticky="w", padx=(18, 8), pady=3)
             self.attachment_filter_var = tk.StringVar(value="All")
             attach_combo = ttk.Combobox(
                 result_filter_frame,
                 textvariable=self.attachment_filter_var,
                 values=["All", "With Attachments", "Without Attachments"],
-                width=20,
+                width=18,
                 state="readonly"
             )
-            attach_combo.grid(row=0, column=5, sticky="w", pady=4)
+            attach_combo.grid(row=0, column=5, sticky="w", pady=3)
             attach_combo.bind("<<ComboboxSelected>>", lambda event: self.apply_result_filter())
 
         self.status_var = tk.StringVar(value="Ready.")
@@ -926,16 +966,16 @@ class ResultsTab(ttk.Frame):
             self,
             textvariable=self.status_var,
             style="Status.TLabel"
-        ).pack(fill=tk.X, pady=(0, 10))
+        ).grid(row=3, column=0, sticky="ew", pady=(0, 8))
 
         table_frame = ttk.Frame(self, style="Surface.TFrame")
-        table_frame.pack(fill=tk.BOTH, expand=True)
+        table_frame.grid(row=4, column=0, sticky="nsew")
 
-        self.tree = ttk.Treeview(table_frame, columns=self.columns, show="headings")
+        self.tree = ttk.Treeview(table_frame, columns=self.columns, show="headings", height=12)
         self.tree.tag_configure("odd", background=COLORS["surface"])
         self.tree.tag_configure("even", background=COLORS["row_alt"])
 
-        headings = {
+        self.column_headings = {
             "select": "Select",
             "email_date": "Email Date",
             "from": "From",
@@ -972,12 +1012,18 @@ class ResultsTab(ttk.Frame):
         }
 
         for column in self.columns:
-            self.tree.heading(column, text=headings[column])
+            self.tree.heading(
+                column,
+                text=self.column_headings[column],
+                command=lambda selected_column=column: self.sort_by_column(selected_column)
+            )
             self.tree.column(column, width=widths[column], anchor="w")
 
         self.tree.column("select", width=70, anchor="center")
         self.tree.bind("<Button-1>", self.on_tree_click)
+        self.tree.bind("<Double-1>", self.show_selected_row_details)
         self.tree.bind("<space>", self.toggle_selected_rows)
+        self.tree.bind("<MouseWheel>", self.on_tree_mousewheel)
 
         tree_scroll_y = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         tree_scroll_x = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.tree.xview)
@@ -1125,6 +1171,61 @@ class ResultsTab(ttk.Frame):
     def apply_result_filter(self):
         self.refresh_tree()
 
+    def get_sort_value(self, row, column):
+        if column == "select":
+            return 1 if row.get("_selected") else 0
+
+        value = row.get(column, "")
+
+        if column == "email_date":
+            try:
+                return datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return datetime.min
+
+        if column == "amount":
+            amount_text = re.sub(r"[^0-9.]", "", str(value))
+            try:
+                return float(amount_text)
+            except ValueError:
+                return -1
+
+        if column == "attachment_count":
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+
+        return str(value or "").casefold()
+
+    def sort_by_column(self, column):
+        if not self.results:
+            return
+
+        if self.sort_column == column:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = column
+            self.sort_reverse = False
+
+        self.results.sort(
+            key=lambda row: self.get_sort_value(row, column),
+            reverse=self.sort_reverse
+        )
+        self.refresh_tree()
+        self.update_column_headings()
+
+    def update_column_headings(self):
+        for column in self.columns:
+            label = self.column_headings[column]
+            if column == self.sort_column:
+                label += " DESC" if self.sort_reverse else " ASC"
+            self.tree.heading(
+                column,
+                text=label,
+                command=lambda selected_column=column: self.sort_by_column(selected_column)
+            )
+
     def load_results(self, results):
         self.results = results
         self.refresh_tree()
@@ -1200,6 +1301,161 @@ class ResultsTab(ttk.Frame):
                 self.results[index]["_selected"] = not self.results[index].get("_selected", False)
                 self.refresh_tree()
 
+    def on_tree_mousewheel(self, event):
+        self.tree.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def show_selected_row_details(self, event):
+        item_id = self.tree.identify_row(event.y)
+        if not item_id:
+            selected_items = self.tree.selection()
+            item_id = selected_items[0] if selected_items else ""
+
+        index = self.tree_item_to_index.get(item_id)
+        if index is None:
+            return
+
+        self.show_row_details_window(self.results[index])
+
+    def show_row_details_window(self, row):
+        window = tk.Toplevel(self)
+        window.title("Email Details")
+        window.geometry("900x700")
+        window.minsize(720, 520)
+        window.configure(bg=COLORS["bg"])
+        window.transient(self.winfo_toplevel())
+
+        container = ttk.Frame(window, padding=18, style="Modern.TFrame")
+        container.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(container, padding=(18, 14), style="Header.TFrame")
+        header.pack(fill=tk.X, pady=(0, 12))
+
+        title = row.get("subject") or row.get("source") or "Email Details"
+        ttk.Label(
+            header,
+            text=str(title)[:110],
+            style="Title.TLabel"
+        ).pack(anchor="w")
+
+        subtitle_parts = [
+            str(row.get("email_date", "")).strip(),
+            str(row.get("from", "")).strip()
+        ]
+        subtitle = "  |  ".join(part for part in subtitle_parts if part)
+        ttk.Label(
+            header,
+            text=subtitle or "Raw row details",
+            style="Subtitle.TLabel"
+        ).pack(anchor="w", pady=(4, 0))
+
+        message_card = ttk.LabelFrame(
+            container,
+            text="Email Message",
+            padding=14,
+            style="Card.TLabelframe"
+        )
+        message_card.pack(fill=tk.X, pady=(0, 12))
+        message_card.columnconfigure(1, weight=1)
+
+        meta_rows = [
+            ("From", row.get("from", "")),
+            ("To", row.get("to", "")),
+            ("Cc", row.get("cc", "")),
+            ("Reply-To", row.get("reply_to", "")),
+            ("Date", row.get("email_date", "")),
+        ]
+
+        meta_index = 0
+        for label, value in meta_rows:
+            if not value:
+                continue
+            ttk.Label(message_card, text=f"{label}:", style="Muted.TLabel").grid(
+                row=meta_index,
+                column=0,
+                sticky="nw",
+                padx=(0, 10),
+                pady=3
+            )
+            tk.Label(
+                message_card,
+                text=str(value),
+                bg=COLORS["surface"],
+                fg=COLORS["text"],
+                anchor="w",
+                justify=tk.LEFT,
+                wraplength=720,
+                font=("Segoe UI", 10)
+            ).grid(row=meta_index, column=1, sticky="ew", pady=3)
+            meta_index += 1
+
+        chip_frame = ttk.Frame(message_card, style="Surface.TFrame")
+        chip_frame.grid(row=meta_index, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        chip_values = []
+        if self.tab_type == "bank":
+            chip_values = [
+                ("Source", row.get("source", "")),
+                ("Amount", row.get("amount", "")),
+                ("Status", row.get("status", "")),
+            ]
+        else:
+            chip_values = [
+                ("Attachments", row.get("has_attachments", "")),
+                ("Count", row.get("attachment_count", "")),
+            ]
+
+        for label, value in chip_values:
+            if not value:
+                continue
+            tk.Label(
+                chip_frame,
+                text=f"{label}: {value}",
+                bg=COLORS["surface_alt"],
+                fg=COLORS["text"],
+                padx=10,
+                pady=5,
+                font=("Segoe UI", 9, "bold")
+            ).pack(side=tk.LEFT, padx=(0, 8))
+
+        body_frame = ttk.LabelFrame(
+            container,
+            text="Message Preview",
+            padding=12,
+            style="Card.TLabelframe"
+        )
+        body_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+        body_frame.rowconfigure(0, weight=1)
+        body_frame.columnconfigure(0, weight=1)
+
+        body_text = tk.Text(
+            body_frame,
+            wrap="word",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief="flat",
+            bd=0,
+            padx=16,
+            pady=14,
+            font=("Segoe UI", 10),
+            height=10
+        )
+        body_scroll_y = ttk.Scrollbar(body_frame, orient=tk.VERTICAL, command=body_text.yview)
+        body_text.configure(yscrollcommand=body_scroll_y.set)
+        body_text.grid(row=0, column=0, sticky="nsew")
+        body_scroll_y.grid(row=0, column=1, sticky="ns")
+
+        body_preview = row.get("body_preview", "")
+        body_text.insert("1.0", body_preview or "No message preview available.")
+        body_text.config(state=tk.DISABLED)
+
+        button_frame = ttk.Frame(container, style="Toolbar.TFrame")
+        button_frame.pack(fill=tk.X, pady=(12, 0))
+        ttk.Button(button_frame, text="Close", command=window.destroy, style="Accent.TButton").pack(side=tk.RIGHT)
+
+        window.grab_set()
+        window.focus_set()
+
     def toggle_selected_rows(self, event=None):
         selected_items = self.tree.selection()
         for item_id in selected_items:
@@ -1257,7 +1513,10 @@ class ResultsTab(ttk.Frame):
         self.results = []
         self.visible_indexes = []
         self.tree_item_to_index = {}
+        self.sort_column = None
+        self.sort_reverse = False
         self.tree.delete(*self.tree.get_children())
+        self.update_column_headings()
         self.export_selected_button.config(state=tk.DISABLED)
         self.export_visible_button.config(state=tk.DISABLED)
         self.status_var.set("Ready.")
@@ -1278,8 +1537,8 @@ class EmailExtractorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Email Extractor")
-        self.root.geometry("1500x820")
-        self.root.minsize(1200, 700)
+        self.root.geometry("1500x860")
+        self.root.minsize(980, 620)
 
         self.credentials = {}
         self.icon_image = None
@@ -1304,11 +1563,11 @@ class EmailExtractorApp:
             pass
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root, padding=16, style="Modern.TFrame")
+        main_frame = ttk.Frame(self.root, padding=12, style="Modern.TFrame")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        header_frame = ttk.Frame(main_frame, padding=(18, 16), style="Header.TFrame")
-        header_frame.pack(fill=tk.X, pady=(0, 14))
+        header_frame = ttk.Frame(main_frame, padding=(16, 11), style="Header.TFrame")
+        header_frame.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(
             header_frame,
@@ -1320,38 +1579,38 @@ class EmailExtractorApp:
             header_frame,
             text="General email search and bank transaction exports in one workspace",
             style="Subtitle.TLabel"
-        ).pack(anchor="w", pady=(4, 0))
+        ).pack(anchor="w", pady=(2, 0))
 
         login_frame = ttk.LabelFrame(
             main_frame,
             text="Login Loaded From credentials.json",
-            padding=14,
+            padding=10,
             style="Card.TLabelframe"
         )
-        login_frame.pack(fill=tk.X, pady=(0, 14))
+        login_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(login_frame, text="IMAP Server:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(login_frame, text="IMAP Server:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
         self.imap_server_var = tk.StringVar(value="")
-        ttk.Entry(login_frame, textvariable=self.imap_server_var, width=28, state="readonly").grid(row=0, column=1, sticky="w", pady=4)
+        ttk.Entry(login_frame, textvariable=self.imap_server_var, width=24, state="readonly").grid(row=0, column=1, sticky="w", pady=3)
 
-        ttk.Label(login_frame, text="Port:").grid(row=0, column=2, sticky="w", padx=(20, 8), pady=4)
+        ttk.Label(login_frame, text="Port:").grid(row=0, column=2, sticky="w", padx=(18, 8), pady=3)
         self.imap_port_var = tk.StringVar(value="")
-        ttk.Entry(login_frame, textvariable=self.imap_port_var, width=8, state="readonly").grid(row=0, column=3, sticky="w", pady=4)
+        ttk.Entry(login_frame, textvariable=self.imap_port_var, width=8, state="readonly").grid(row=0, column=3, sticky="w", pady=3)
 
-        ttk.Label(login_frame, text="Mailbox:").grid(row=0, column=4, sticky="w", padx=(20, 8), pady=4)
+        ttk.Label(login_frame, text="Mailbox:").grid(row=0, column=4, sticky="w", padx=(18, 8), pady=3)
         self.mailbox_var = tk.StringVar(value="")
-        ttk.Entry(login_frame, textvariable=self.mailbox_var, width=20, state="readonly").grid(row=0, column=5, sticky="w", pady=4)
+        ttk.Entry(login_frame, textvariable=self.mailbox_var, width=18, state="readonly").grid(row=0, column=5, sticky="w", pady=3)
 
-        ttk.Label(login_frame, text="Login Email:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(login_frame, text="Login Email:").grid(row=0, column=6, sticky="w", padx=(18, 8), pady=3)
         self.login_email_var = tk.StringVar(value="")
-        ttk.Entry(login_frame, textvariable=self.login_email_var, width=42, state="readonly").grid(row=1, column=1, columnspan=2, sticky="w", pady=4)
+        ttk.Entry(login_frame, textvariable=self.login_email_var, width=32, state="readonly").grid(row=0, column=7, sticky="w", pady=3)
 
-        ttk.Label(login_frame, text="Password:").grid(row=1, column=3, sticky="w", padx=(20, 8), pady=4)
+        ttk.Label(login_frame, text="Password:").grid(row=0, column=8, sticky="w", padx=(18, 8), pady=3)
         self.password_display_var = tk.StringVar(value="Loaded from file")
-        ttk.Entry(login_frame, textvariable=self.password_display_var, width=35, show="*", state="readonly").grid(row=1, column=4, columnspan=2, sticky="w", pady=4)
+        ttk.Entry(login_frame, textvariable=self.password_display_var, width=18, show="*", state="readonly").grid(row=0, column=9, sticky="w", pady=3)
 
         self.credentials_status_var = tk.StringVar(value="Loading credentials...")
-        ttk.Label(login_frame, textvariable=self.credentials_status_var).grid(row=2, column=0, columnspan=6, sticky="w", pady=(6, 0))
+        ttk.Label(login_frame, textvariable=self.credentials_status_var, style="Muted.TLabel").grid(row=1, column=0, columnspan=10, sticky="w", pady=(4, 0))
 
         self.notebook = ttk.Notebook(main_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
