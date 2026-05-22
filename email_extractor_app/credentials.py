@@ -1,6 +1,8 @@
 import json
 import os
 
+from .config import external_app_path
+
 
 class CredentialsLoader:
     REQUIRED_FIELDS = [
@@ -11,8 +13,8 @@ class CredentialsLoader:
         "password",
     ]
 
-    def __init__(self, file_path="credentials.json"):
-        self.file_path = file_path
+    def __init__(self, file_path=None):
+        self.file_path = file_path or external_app_path("credentials.json")
 
     def load(self):
         if not os.path.exists(self.file_path):
@@ -34,4 +36,3 @@ class CredentialsLoader:
             )
 
         return credentials
-

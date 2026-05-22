@@ -31,6 +31,15 @@ def app_path(file_name):
     return os.path.join(base_dir, file_name)
 
 
+def external_app_path(file_name):
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    return os.path.join(base_dir, file_name)
+
+
 def configure_windows_taskbar_icon():
     if sys.platform != "win32":
         return
@@ -42,4 +51,3 @@ def configure_windows_taskbar_icon():
     except Exception:
         # Taskbar metadata is best-effort; Tk can still run without it.
         pass
-
