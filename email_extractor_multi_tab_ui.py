@@ -35,6 +35,22 @@ from tkinter import ttk, messagebox, filedialog
 APP_ICON_ICO = "app_icon.ico"
 APP_ICON_PNG = "app_icon.png"
 APP_USER_MODEL_ID = "gmail_transaction_alert.email_extractor.multi_tab"
+COLORS = {
+    "bg": "#f6f8fb",
+    "surface": "#ffffff",
+    "surface_alt": "#eef4ff",
+    "border": "#d8e0ea",
+    "text": "#172033",
+    "muted": "#667085",
+    "primary": "#2563eb",
+    "primary_hover": "#1d4ed8",
+    "primary_pressed": "#1e40af",
+    "success": "#0f766e",
+    "danger": "#dc2626",
+    "danger_hover": "#b91c1c",
+    "row_alt": "#f9fbff",
+    "selected": "#dbeafe"
+}
 
 
 def app_path(file_name):
@@ -53,6 +69,183 @@ def configure_windows_taskbar_icon():
     except Exception:
         # Taskbar metadata is best-effort; Tk can still run without it.
         pass
+
+
+def configure_theme(root):
+    root.configure(bg=COLORS["bg"])
+
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+
+    font_family = "Segoe UI"
+    default_font = (font_family, 10)
+
+    style.configure(".", font=default_font, background=COLORS["bg"], foreground=COLORS["text"])
+    style.configure("TLabel", background=COLORS["surface"], foreground=COLORS["text"])
+    style.configure("Modern.TFrame", background=COLORS["bg"])
+    style.configure("Surface.TFrame", background=COLORS["surface"])
+    style.configure("Toolbar.TFrame", background=COLORS["bg"])
+
+    style.configure(
+        "Header.TFrame",
+        background=COLORS["text"],
+        relief="flat"
+    )
+    style.configure(
+        "Title.TLabel",
+        background=COLORS["text"],
+        foreground="#ffffff",
+        font=(font_family, 22, "bold")
+    )
+    style.configure(
+        "Subtitle.TLabel",
+        background=COLORS["text"],
+        foreground="#cbd5e1",
+        font=(font_family, 10)
+    )
+    style.configure(
+        "Section.TLabel",
+        background=COLORS["surface"],
+        foreground=COLORS["text"],
+        font=(font_family, 11, "bold")
+    )
+    style.configure(
+        "Muted.TLabel",
+        background=COLORS["surface"],
+        foreground=COLORS["muted"],
+        font=(font_family, 9)
+    )
+    style.configure(
+        "Status.TLabel",
+        background=COLORS["surface_alt"],
+        foreground=COLORS["success"],
+        font=(font_family, 10, "bold"),
+        padding=(12, 7)
+    )
+
+    style.configure(
+        "Card.TLabelframe",
+        background=COLORS["surface"],
+        bordercolor=COLORS["border"],
+        lightcolor=COLORS["border"],
+        darkcolor=COLORS["border"],
+        relief="solid",
+        padding=12
+    )
+    style.configure(
+        "Card.TLabelframe.Label",
+        background=COLORS["surface"],
+        foreground=COLORS["text"],
+        font=(font_family, 11, "bold")
+    )
+
+    style.configure(
+        "TEntry",
+        fieldbackground="#ffffff",
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        lightcolor=COLORS["border"],
+        darkcolor=COLORS["border"],
+        padding=(8, 6)
+    )
+    style.map("TEntry", bordercolor=[("focus", COLORS["primary"])])
+
+    style.configure(
+        "TCombobox",
+        fieldbackground="#ffffff",
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        arrowcolor=COLORS["muted"],
+        padding=(8, 5)
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", "#ffffff")],
+        bordercolor=[("focus", COLORS["primary"])]
+    )
+
+    style.configure(
+        "TButton",
+        background="#ffffff",
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        focusthickness=0,
+        padding=(13, 8)
+    )
+    style.map(
+        "TButton",
+        background=[("active", "#f1f5f9"), ("pressed", "#e2e8f0"), ("disabled", "#f1f5f9")],
+        foreground=[("disabled", "#98a2b3")]
+    )
+    style.configure(
+        "Accent.TButton",
+        background=COLORS["primary"],
+        foreground="#ffffff",
+        bordercolor=COLORS["primary"],
+        padding=(16, 8)
+    )
+    style.map(
+        "Accent.TButton",
+        background=[("active", COLORS["primary_hover"]), ("pressed", COLORS["primary_pressed"]), ("disabled", "#93c5fd")],
+        foreground=[("disabled", "#eff6ff")]
+    )
+    style.configure(
+        "Danger.TButton",
+        background="#ffffff",
+        foreground=COLORS["danger"],
+        bordercolor="#fecaca",
+        padding=(13, 8)
+    )
+    style.map(
+        "Danger.TButton",
+        background=[("active", "#fef2f2"), ("pressed", "#fee2e2")],
+        foreground=[("active", COLORS["danger_hover"])]
+    )
+
+    style.configure(
+        "TNotebook",
+        background=COLORS["bg"],
+        borderwidth=0,
+        tabmargins=(0, 6, 0, 0)
+    )
+    style.configure(
+        "TNotebook.Tab",
+        background="#e8eef7",
+        foreground=COLORS["muted"],
+        padding=(18, 10),
+        font=(font_family, 10, "bold")
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", COLORS["surface"]), ("active", "#f8fafc")],
+        foreground=[("selected", COLORS["primary"]), ("active", COLORS["text"])]
+    )
+
+    style.configure(
+        "Treeview",
+        background=COLORS["surface"],
+        fieldbackground=COLORS["surface"],
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        rowheight=30,
+        font=(font_family, 9)
+    )
+    style.configure(
+        "Treeview.Heading",
+        background="#e8eef7",
+        foreground=COLORS["text"],
+        bordercolor=COLORS["border"],
+        font=(font_family, 9, "bold"),
+        padding=(8, 8)
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", COLORS["selected"])],
+        foreground=[("selected", COLORS["text"])]
+    )
 
 
 # --------------------------------------------------
@@ -545,7 +738,7 @@ def fetch_bank_transactions_imap(
 
 class ResultsTab(ttk.Frame):
     def __init__(self, parent, app, tab_type):
-        super().__init__(parent, padding=12)
+        super().__init__(parent, padding=16, style="Modern.TFrame")
         self.app = app
         self.tab_type = tab_type
         self.results = []
@@ -606,8 +799,8 @@ class ResultsTab(ttk.Frame):
         self.create_widgets()
 
     def create_widgets(self):
-        filters_frame = ttk.LabelFrame(self, text="Email Search Filters", padding=10)
-        filters_frame.pack(fill=tk.X, pady=(0, 10))
+        filters_frame = ttk.LabelFrame(self, text="Email Search Filters", padding=14, style="Card.TLabelframe")
+        filters_frame.pack(fill=tk.X, pady=(0, 12))
 
         if self.tab_type == "general":
             ttk.Label(filters_frame, text="From Contains:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
@@ -645,10 +838,15 @@ class ResultsTab(ttk.Frame):
         self.end_date_var = tk.StringVar(value=datetime.today().strftime("%Y-%m-%d"))
         ttk.Entry(filters_frame, textvariable=self.end_date_var, width=20).grid(row=2, column=3, sticky="w", pady=4)
 
-        buttons_frame = ttk.Frame(self)
-        buttons_frame.pack(fill=tk.X, pady=(0, 10))
+        buttons_frame = ttk.Frame(self, style="Toolbar.TFrame")
+        buttons_frame.pack(fill=tk.X, pady=(0, 12))
 
-        self.run_button = ttk.Button(buttons_frame, text="Run Extraction", command=self.run_extraction)
+        self.run_button = ttk.Button(
+            buttons_frame,
+            text="Run Extraction",
+            command=self.run_extraction,
+            style="Accent.TButton"
+        )
         self.run_button.pack(side=tk.LEFT)
 
         self.export_selected_button = ttk.Button(
@@ -669,10 +867,15 @@ class ResultsTab(ttk.Frame):
 
         ttk.Button(buttons_frame, text="Select All Visible", command=self.select_all_visible).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons_frame, text="Unselect All Visible", command=self.unselect_all_visible).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(buttons_frame, text="Clear Results", command=self.clear_results).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(
+            buttons_frame,
+            text="Clear Results",
+            command=self.clear_results,
+            style="Danger.TButton"
+        ).pack(side=tk.LEFT, padx=(8, 0))
 
-        result_filter_frame = ttk.LabelFrame(self, text="Results Search / Filters", padding=10)
-        result_filter_frame.pack(fill=tk.X, pady=(0, 10))
+        result_filter_frame = ttk.LabelFrame(self, text="Results Search / Filters", padding=14, style="Card.TLabelframe")
+        result_filter_frame.pack(fill=tk.X, pady=(0, 12))
 
         ttk.Label(result_filter_frame, text="Search in Results:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         self.result_search_var = tk.StringVar(value="")
@@ -719,12 +922,18 @@ class ResultsTab(ttk.Frame):
             attach_combo.bind("<<ComboboxSelected>>", lambda event: self.apply_result_filter())
 
         self.status_var = tk.StringVar(value="Ready.")
-        ttk.Label(self, textvariable=self.status_var).pack(anchor="w", pady=(0, 8))
+        ttk.Label(
+            self,
+            textvariable=self.status_var,
+            style="Status.TLabel"
+        ).pack(fill=tk.X, pady=(0, 10))
 
-        table_frame = ttk.Frame(self)
+        table_frame = ttk.Frame(self, style="Surface.TFrame")
         table_frame.pack(fill=tk.BOTH, expand=True)
 
         self.tree = ttk.Treeview(table_frame, columns=self.columns, show="headings")
+        self.tree.tag_configure("odd", background=COLORS["surface"])
+        self.tree.tag_configure("even", background=COLORS["row_alt"])
 
         headings = {
             "select": "Select",
@@ -948,13 +1157,14 @@ class ResultsTab(ttk.Frame):
                 continue
 
             self.visible_indexes.append(index)
-            select_value = "☑" if item.get("_selected") else "☐"
+            select_value = "[x]" if item.get("_selected") else "[ ]"
 
             values = [select_value]
             for column in self.columns[1:]:
                 values.append(item.get(column, ""))
 
-            tree_item = self.tree.insert("", tk.END, values=tuple(values))
+            row_tag = "even" if len(self.visible_indexes) % 2 == 0 else "odd"
+            tree_item = self.tree.insert("", tk.END, values=tuple(values), tags=(row_tag,))
             self.tree_item_to_index[tree_item] = index
 
         self.update_status_selection_counts()
@@ -1074,6 +1284,7 @@ class EmailExtractorApp:
         self.credentials = {}
         self.icon_image = None
 
+        configure_theme(self.root)
         self.set_app_icon()
         self.create_widgets()
         self.load_credentials_to_screen()
@@ -1093,26 +1304,31 @@ class EmailExtractorApp:
             pass
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root, padding=12)
+        main_frame = ttk.Frame(self.root, padding=16, style="Modern.TFrame")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 10))
+        header_frame = ttk.Frame(main_frame, padding=(18, 16), style="Header.TFrame")
+        header_frame.pack(fill=tk.X, pady=(0, 14))
 
         ttk.Label(
             header_frame,
             text="Email Extractor",
-            font=("Segoe UI", 17, "bold")
-        ).pack(side=tk.LEFT)
+            style="Title.TLabel"
+        ).pack(anchor="w")
 
         ttk.Label(
             header_frame,
-            text="General Emails + Bank Transactions",
-            font=("Segoe UI", 10)
-        ).pack(side=tk.LEFT, padx=(14, 0))
+            text="General email search and bank transaction exports in one workspace",
+            style="Subtitle.TLabel"
+        ).pack(anchor="w", pady=(4, 0))
 
-        login_frame = ttk.LabelFrame(main_frame, text="Login Loaded From credentials.json", padding=10)
-        login_frame.pack(fill=tk.X, pady=(0, 10))
+        login_frame = ttk.LabelFrame(
+            main_frame,
+            text="Login Loaded From credentials.json",
+            padding=14,
+            style="Card.TLabelframe"
+        )
+        login_frame.pack(fill=tk.X, pady=(0, 14))
 
         ttk.Label(login_frame, text="IMAP Server:").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
         self.imap_server_var = tk.StringVar(value="")
