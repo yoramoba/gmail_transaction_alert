@@ -1,0 +1,2 @@
+"""Email extractor application package."""
+

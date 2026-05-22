@@ -1,6 +1,6 @@
 # Ignore private local files.
 # credentials.json contains email login details.
-# backup/ is for local backups that should not be committed.
+# backup/ and Backup/ are for local backups that should not be committed.
 credentials.json
 #{
 #  "imap_server": "imap.gmail.com",
@@ -10,3 +10,6 @@ credentials.json
 #  "password": "app-password"
 #}
 backup/
+Backup/
+__pycache__/
+**/__pycache__/
